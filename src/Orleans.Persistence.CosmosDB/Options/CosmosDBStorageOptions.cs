@@ -8,40 +8,51 @@ namespace Orleans.Persistence.CosmosDB
 {
     public class CosmosDBStorageOptions
     {
-        private const string ORLEANS_DB = "Orleans";
+        public const int DEFAULT_INIT_STAGE = ServiceLifecycleStage.ApplicationServices;
         internal const string ORLEANS_STORAGE_COLLECTION = "OrleansStorage";
+        private const string ORLEANS_DB = "Orleans";
         private const int ORLEANS_STORAGE_COLLECTION_THROUGHPUT = 400;
 
-        public CosmosClient Client { get; set; }
+        public string AccountEndpoint { get; set; }
 
         [Redact]
         public string AccountKey { get; set; }
-        public string AccountEndpoint { get; set; }
-        public string DB { get; set; } = ORLEANS_DB;
+
+        public bool CanCreateResources { get; set; }
+        public CosmosClient Client { get; set; }
+        public string Collection { get; set; } = ORLEANS_STORAGE_COLLECTION;
+
+        /// <summary>
+        /// RU units for collection, can be set to 0 if throughput is specified on database level. See https://docs.microsoft.com/en-us/azure/cosmos-db/set-throughput
+        /// </summary>
+        public int CollectionThroughput { get; set; } = ORLEANS_STORAGE_COLLECTION_THROUGHPUT;
+
+        [JsonConverter(typeof(StringEnumConverter))]
+        public ConnectionMode ConnectionMode { get; set; } = ConnectionMode.Direct;
+
+        public CosmosSerializer CustomSerializer { get; set; }
 
         /// <summary>
         /// Database configured throughput, if set to 0 it will not be configured and collection throughput must be set. See https://docs.microsoft.com/en-us/azure/cosmos-db/set-throughput
         /// </summary>
         public int DatabaseThroughput { get; set; } = ORLEANS_STORAGE_COLLECTION_THROUGHPUT;
-        public string Collection { get; set; } = ORLEANS_STORAGE_COLLECTION;
-        /// <summary>
-        /// RU units for collection, can be set to 0 if throughput is specified on database level. See https://docs.microsoft.com/en-us/azure/cosmos-db/set-throughput
-        /// </summary>
-        public int CollectionThroughput { get; set; } = ORLEANS_STORAGE_COLLECTION_THROUGHPUT;
-        public bool CanCreateResources { get; set; }
+
+        public string DB { get; set; } = ORLEANS_DB;
         public bool DeleteStateOnClear { get; set; }
 
-        [JsonConverter(typeof(StringEnumConverter))]
-        public ConnectionMode ConnectionMode { get; set; } = ConnectionMode.Direct;
-
-        public JsonSerializerSettings JsonSerializerSettings { get; set; }
-
-        public bool UseFullAssemblyNames { get; set; } = true;
+        /// <summary>
+        /// Delete the database on initialization.  Useful for testing scenarios.
+        /// </summary>
+        public bool DropDatabaseOnInit { get; set; }
 
         public bool IndentJson { get; set; } = true;
 
-        [JsonConverter(typeof(StringEnumConverter))]
-        public TypeNameHandling TypeNameHandling { get; set; } = TypeNameHandling.All;
+        /// <summary>
+        /// Stage of silo lifecycle where storage should be initialized.  Storage must be initialized prior to use.
+        /// </summary>
+        public int InitStage { get; set; } = DEFAULT_INIT_STAGE;
+
+        public JsonSerializerSettings JsonSerializerSettings { get; set; }
 
         /// <summary>
         /// List of JSON path strings.
@@ -50,17 +61,10 @@ namespace Orleans.Persistence.CosmosDB
         /// </summary>
         public List<string> StateFieldsToIndex { get; set; } = new List<string>();
 
-        /// <summary>
-        /// Delete the database on initialization.  Useful for testing scenarios.
-        /// </summary>
-        public bool DropDatabaseOnInit { get; set; }
+        [JsonConverter(typeof(StringEnumConverter))]
+        public TypeNameHandling TypeNameHandling { get; set; } = TypeNameHandling.All;
 
-        /// <summary>
-        /// Stage of silo lifecycle where storage should be initialized.  Storage must be initialized prior to use.
-        /// </summary>
-        public int InitStage { get; set; } = DEFAULT_INIT_STAGE;
-
-        public const int DEFAULT_INIT_STAGE = ServiceLifecycleStage.ApplicationServices;
+        public bool UseFullAssemblyNames { get; set; } = true;
 
         // TODO: Consistency level for emulator (defaults to Session; https://docs.microsoft.com/en-us/azure/cosmos-db/local-emulator)
         internal ConsistencyLevel? GetConsistencyLevel() => !string.IsNullOrWhiteSpace(this.AccountEndpoint) && this.AccountEndpoint.Contains("localhost") ? (ConsistencyLevel?)ConsistencyLevel.Session : null;
@@ -71,8 +75,8 @@ namespace Orleans.Persistence.CosmosDB
     /// </summary>
     public class CosmosDBStorageOptionsValidator : IConfigurationValidator
     {
-        private readonly CosmosDBStorageOptions options;
         private readonly string name;
+        private readonly CosmosDBStorageOptions options;
 
         /// <summary>
         /// Constructor
